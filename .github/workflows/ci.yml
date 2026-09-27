@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install test dependencies
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
+      - name: Run Pester
+        shell: pwsh
+        run: Invoke-Pester -Path ./tests/CitrixExporter.Tests.ps1 -CI -Output Detailed
+
+  lint:
+    name: PowerShell analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+      - name: Analyze PowerShell
+        shell: pwsh
+        run: |
+          $results = @(Invoke-ScriptAnalyzer -Path . -Recurse -Severity Warning,Error)
+          $results | Format-Table -AutoSize
+          if ($results.Count -gt 0) { throw 'PSScriptAnalyzer reported findings.' }
+      - name: Parse Grafana dashboard
+        shell: pwsh
+        run: Get-Content ./monitoring/grafana/dashboards/citrix-overview.json -Raw | ConvertFrom-Json | Out-Null
+
+  diagram-validation:
+    name: Mermaid diagram validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render versioned Mermaid sources
+        run: |
+          for diagram in docs/diagrams/*.mmd; do
+            output="/tmp/$(basename "${diagram%.mmd}").svg"
+            docker run --rm --volume "$PWD:/data:ro" \
+              ghcr.io/mermaid-js/mermaid-cli/mermaid-cli@sha256:a6fb0574dded4086888b5e38476899c9aff8963196f689f11a0f8fceee588ce1 \
+              -i "/data/$diagram" -o "$output" -b white
+          done
+
+  docker-smoke:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose model
+        run: docker compose config --quiet
+      - name: Start monitoring stack
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - name: Verify exporter, Prometheus, and Grafana
+        run: |
+          curl --fail --silent --retry 10 --retry-all-errors --retry-delay 2 http://localhost:9187/ | grep 'Citrix Exporter'
+          curl --fail --silent http://localhost:9187/health | grep '"status":"ok"'
+          curl --fail --silent http://localhost:9187/metrics | grep 'citrix_exporter_scrape_success 1'
+          curl --fail --silent http://localhost:9187/metrics | docker compose exec -T prometheus promtool check metrics
+
+          for attempt in {1..10}; do
+            if curl --fail --silent --get --data-urlencode 'query=up{job="citrix-exporter"}' http://localhost:9090/api/v1/query | grep -q '"1"'; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then exit 1; fi
+            sleep 2
+          done
+
+          for attempt in {1..10}; do
+            if curl --fail --silent 'http://localhost:3000/api/search?query=Citrix' | grep -q 'citrix-vdi-overview'; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then exit 1; fi
+            sleep 2
+          done
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop monitoring stack
+        if: always()
+        run: docker compose down --volumes

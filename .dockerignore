@@ -1,0 +1,11 @@
+.git
+.github
+artifacts
+demo
+docs
+monitoring
+tests
+CHANGELOG.md
+LICENSE
+README.md
+testResults.xml

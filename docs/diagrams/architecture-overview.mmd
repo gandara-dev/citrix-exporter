@@ -1,0 +1,8 @@
+graph LR
+    A["Citrix Broker SDK"] --> D["Snapshot collector"]
+    B["Optional lmstat"] --> D
+    C["Synthetic provider"] --> D
+    D --> E["Prometheus text renderer"]
+    E --> F["HTTP metrics endpoint"]
+    F --> G["Prometheus"]
+    G --> H["Grafana dashboard"]

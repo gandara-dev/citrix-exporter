@@ -1,0 +1,6 @@
+TestResults/
+testResults.xml
+demo/*.cast
+artifacts/
+*.user
+*.suo

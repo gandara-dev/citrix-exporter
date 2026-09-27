@@ -1,0 +1,80 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "expr": "sum(citrix_vdas{registration_state=\"Unregistered\"})", "refId": "A" }],
+      "title": "Unregistered VDAs",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "expr": "citrix_exporter_scrape_success", "refId": "A" }],
+      "title": "Last Scrape",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 0 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "expr": "citrix_logon_duration_seconds", "legendFormat": "{{delivery_group}}", "refId": "A" }],
+      "title": "Average Logon Duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 5 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "expr": "sum by (state) (citrix_sessions)", "legendFormat": "{{state}}", "refId": "A" }],
+      "title": "Sessions by State",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 5 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [{ "expr": "citrix_licenses_in_use / citrix_licenses", "legendFormat": "{{feature}}", "refId": "A" }],
+      "title": "License Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 7, "w": 16, "x": 0, "y": 13 },
+      "id": 6,
+      "options": { "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true },
+      "targets": [{ "expr": "citrix_mcs_catalog_machines", "format": "table", "instant": true, "refId": "A" }],
+      "title": "MCS Catalog Inventory",
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true }, "renameByName": { "Value": "Machines", "catalog": "Catalog" } } }],
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 42,
+  "tags": ["citrix", "vdi", "prometheus"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "Citrix VDI Overview",
+  "uid": "citrix-vdi-overview",
+  "version": 1
+}

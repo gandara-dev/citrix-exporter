@@ -1,0 +1,6 @@
+graph LR
+    A["Prometheus"] --> B["Exporter host"]
+    B --> C["Citrix Delivery Controller"]
+    B --> D["Citrix License Server"]
+    B --> E["Local logs"]
+    F["Operator"] --> B
