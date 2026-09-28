@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/powershell:7.4-debian-12@sha256:206a748b34deec1b64553fcfa92294fc871c2df5855e9f340df172756bef201f
+FROM mcr.microsoft.com/powershell:7.5-debian-12@sha256:7ab5bd5ca6f95a3351fa0c6a1205237d57048c94542355aab55519a0861a9b25
 
 WORKDIR /app
 COPY exporter.ps1 ./
