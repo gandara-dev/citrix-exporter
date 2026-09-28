@@ -104,7 +104,7 @@ function Get-CitrixExporterSelfMetric {
         "citrix_exporter_scrape_errors_total $ErrorCount"
         '# HELP citrix_exporter_build_info Exporter build and operating mode information.'
         '# TYPE citrix_exporter_build_info gauge'
-        "citrix_exporter_build_info{version=`"0.1.0`",mode=`"$Mode`"} 1"
+        "citrix_exporter_build_info{version=`"0.1.1`",mode=`"$Mode`"} 1"
     )
     return ($lines -join "`n") + "`n"
 }

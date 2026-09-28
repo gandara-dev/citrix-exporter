@@ -59,6 +59,23 @@ Describe 'Synthetic Citrix metrics' {
 }
 
 Describe 'Prometheus rendering' {
+    It 'keeps the build metric aligned with the module version' {
+        $manifest = Test-ModuleManifest $modulePath
+        $metrics = InModuleScope CitrixExporter {
+            Get-CitrixExporterSelfMetric `
+                -Success $true `
+                -DurationSeconds 0.1 `
+                -ErrorCount 0 `
+                -Mode simulation
+        }
+
+        $metrics | Should -Match (
+            'citrix_exporter_build_info\{version="' +
+            [regex]::Escape([string]$manifest.Version) +
+            '",mode="simulation"\} 1'
+        )
+    }
+
     It 'escapes special characters in labels' {
         InModuleScope CitrixExporter {
             $value = ConvertTo-PrometheusLabelValue -Value "group\`"one`nnext"

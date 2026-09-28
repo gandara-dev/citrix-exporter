@@ -46,20 +46,22 @@ and `3000`.
 docker compose config --quiet
 docker compose up --build --detach --wait --wait-timeout 180
 
-Invoke-WebRequest http://localhost:9187/
-Invoke-RestMethod http://localhost:9187/health
-Invoke-WebRequest http://localhost:9187/metrics
-Invoke-RestMethod 'http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22citrix-exporter%22%7D'
-Invoke-RestMethod 'http://localhost:3000/api/search?query=Citrix'
+./scripts/Test-ComposeStack.ps1 | Format-List
 ```
 
 Validate the exposition with the `promtool` included in the Prometheus container:
 
 ```powershell
-$metrics = Invoke-WebRequest http://localhost:9187/metrics |
-    Select-Object -ExpandProperty Content
-$metrics | docker compose exec -T prometheus promtool check metrics
+docker compose exec -T prometheus sh -c `
+  'wget -qO- http://exporter:9187/metrics | promtool check metrics'
 ```
+
+The request and `promtool` process run inside the Compose network. Do not pipe
+the multiline `.Content` string from Windows PowerShell directly to `promtool`:
+PowerShell appends a trailing CRLF record that older `promtool` parsers reject
+as an invalid metric name. The acceptance script uses the portable form above
+and also checks the landing page, health endpoint, Prometheus target, and
+provisioned Grafana dashboard.
 
 Always stop the stack after testing:
 
@@ -72,10 +74,11 @@ If a smoke test fails, collect `docker compose ps` and
 
 ## Controlled failure test
 
-Run the exporter outside Compose with an injected Broker failure:
+Run the automated failure-mode acceptance test after the Compose image has been
+built:
 
 ```powershell
-pwsh ./exporter.ps1 -Simulation -InjectFailureSource Broker
+./scripts/Test-FailureMode.ps1 | Format-List
 ```
 
 The `/metrics` response must remain HTTP 200, set

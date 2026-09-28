@@ -131,7 +131,7 @@ pwsh ./exporter.ps1 `
 Citrix warns that `lmstat -a` can create substantial activity when many licenses
 are checked out. Use a conservative Prometheus interval, measure the impact, or
 omit licensing arguments. See the official
-[Citrix licensing command reference](https://docs.citrix.com/en-us/licensing/current-release/license-administration-commands.html).
+[Citrix licensing command reference](https://docs.citrix.com/en-us/licensing/11-17-2-56200/license-administration-commands.html).
 
 The exporter has no authentication or TLS. Keep it on a management network,
 bind it to loopback when possible, and place an authenticated TLS reverse proxy
@@ -160,12 +160,20 @@ all Mermaid sources, starts the complete Compose stack, validates exposition
 with `promtool`, queries Prometheus, and confirms Grafana provisioning. See the
 [testing guide](docs/testing.md) for exact local commands.
 
+After `docker compose up`, run the same cross-platform acceptance check used by
+CI:
+
+```powershell
+./scripts/Test-ComposeStack.ps1 | Format-List
+```
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
 - [Metrics reference](docs/metrics-reference.md)
 - [Operations guide](docs/operations-guide.md)
 - [Testing guide](docs/testing.md)
+- [Release verification](docs/release-verification.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
@@ -185,7 +193,7 @@ with `promtool`, queries Prometheus, and confirms Grafana provisioning. See the
 
 ## Current scope
 
-Version `0.1.0` supports one synchronous target per exporter process. It does
+Version `0.1.1` supports one synchronous target per exporter process. It does
 not provide authentication, TLS, caching, concurrent collection, service
 installation, or automatic discovery. These are explicit operational
 boundaries, not implicit promises.

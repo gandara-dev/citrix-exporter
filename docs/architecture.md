@@ -1,7 +1,7 @@
 # Architecture
 
 This document describes the component model, data flow, failure semantics, and
-trust boundaries of Citrix Exporter `0.1.0`.
+trust boundaries of Citrix Exporter `0.1.1`.
 
 ## Design goals
 
@@ -131,7 +131,7 @@ proxy.
 
 ## Deliberate limitations
 
-Version `0.1.0` does not implement concurrent requests, caching, multi-target
+Version `0.1.1` does not implement concurrent requests, caching, multi-target
 query parameters, service discovery, TLS, authentication, Windows service
 installation, or automatic retry. These constraints keep the implementation
 small and its operational behavior explicit.
