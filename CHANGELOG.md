@@ -18,6 +18,8 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- License changed from MIT to PolyForm Shield 1.0.0. Releases up to v0.1.1
+  remain available under the MIT license.
 - The synthetic site now follows a daily load curve over 110 fictional VDAs, so
   graphs move instead of staying flat. Values are deterministic per minute.
 - `citrix_exporter_build_info` reads the version from the module manifest.

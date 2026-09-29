@@ -17,6 +17,8 @@ runs the same synthetic site as `-Simulation` mode. Change load, unregistered
 VDAs, logon delay, license pools, or take the Broker down, and watch `/metrics`
 and the alert rules react.
 
+![Metrics Playground: scenario file, /metrics response, alert rules, and a panel](docs/metrics-playground.jpg)
+
 ![Citrix Exporter demo](docs/demo.gif)
 
 ## Why
@@ -80,7 +82,7 @@ docker compose down --volumes
 
 ## Grafana dashboard
 
-![Grafana dashboard during the Monday morning scenario](docs/grafana-dashboard.png)
+![Grafana dashboard during the Monday morning scenario](docs/grafana-dashboard.jpg)
 
 The provisioned dashboard after ten minutes of the `monday-morning.json`
 scenario: four Engineering VDAs unregistered for longer than the rule's `for`
@@ -246,4 +248,7 @@ boundaries, not implicit promises.
 
 ## License
 
-[MIT](LICENSE)
+[PolyForm Shield 1.0.0](LICENSE). You may use, study, and modify this project,
+including inside your organization, but not to offer a product that competes
+with it. This is a source-available license, not an OSI-approved open-source
+license. Releases up to v0.1.1 were published under the MIT license.
