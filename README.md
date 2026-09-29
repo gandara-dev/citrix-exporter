@@ -12,10 +12,20 @@ Grafana dashboard work without a Citrix environment.
 > All simulation hostnames, delivery groups, catalogs, features, and values are
 > fictional. Never commit production credentials or customer data.
 
-**Try it in the browser:** the [Metrics Playground](https://gandara-dev.github.io/citrix-exporter/)
-runs the same synthetic site as `-Simulation` mode. Change load, unregistered
-VDAs, logon delay, license pools, or take the Broker down, and watch `/metrics`
-and the alert rules react.
+## Try it
+
+**Run the real stack in your browser:** the exporter, Prometheus with the alert
+rules, and Grafana with the dashboard, on the synthetic Citrix site. Grafana
+opens on the dashboard after one or two minutes. A GitHub account is needed;
+the codespace uses your own free Codespaces quota.
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/gandara-dev/citrix-exporter?quickstart=1)
+
+**Quick look without an account:** the
+[Metrics Playground](https://gandara-dev.github.io/citrix-exporter/) runs the
+same synthetic site in the page. Change load, unregistered VDAs, logon delay,
+license pools, or take the Broker down, and watch `/metrics` and the alert
+rules react.
 
 ![Metrics Playground: scenario file, /metrics response, alert rules, and a panel](docs/metrics-playground.jpg)
 

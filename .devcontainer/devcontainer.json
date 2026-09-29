@@ -1,0 +1,27 @@
+{
+  "name": "Citrix Exporter (synthetic stack)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/powershell:1": {}
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  },
+  "forwardPorts": [3000, 9090, 9187],
+  "portsAttributes": {
+    "3000": { "label": "Grafana dashboard", "onAutoForward": "openBrowser" },
+    "9090": { "label": "Prometheus", "onAutoForward": "silent" },
+    "9187": { "label": "Exporter", "onAutoForward": "silent" }
+  },
+  "postStartCommand": "bash .devcontainer/start-stack.sh",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [".devcontainer/README.md"]
+    },
+    "vscode": {
+      "extensions": ["ms-vscode.powershell"]
+    }
+  }
+}
