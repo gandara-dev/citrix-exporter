@@ -81,6 +81,27 @@ $prometheus = Invoke-WithRetry -Description 'Prometheus target query' @retryPara
     $response
 }
 
+& docker compose exec -T prometheus sh -c `
+    'cd /etc/prometheus && promtool check rules alerts.yml && promtool test rules alerts.test.yml'
+if ($LASTEXITCODE -ne 0) {
+    throw "promtool rejected the alert rules or their unit tests (exit code $LASTEXITCODE)."
+}
+
+$expectedAlerts = @(
+    'CitrixExporterCollectionFailing'
+    'CitrixLicensesNearlyExhausted'
+    'CitrixSlowLogons'
+    'CitrixVdasUnregistered'
+)
+$alertRules = Invoke-WithRetry -Description 'Prometheus alert rules' @retryParameters -Operation {
+    $response = Invoke-RestMethod -Uri 'http://localhost:9090/api/v1/rules?type=alert' -TimeoutSec 5
+    $loaded = @($response.data.groups | ForEach-Object { $_.rules } | ForEach-Object { $_.name } | Sort-Object)
+    if (Compare-Object -ReferenceObject $expectedAlerts -DifferenceObject $loaded) {
+        throw "Prometheus loaded unexpected alert rules: $($loaded -join ', ')"
+    }
+    $loaded
+}
+
 $dashboard = Invoke-WithRetry -Description 'Grafana dashboard lookup' @retryParameters -Operation {
     $response = Invoke-RestMethod `
         -Uri 'http://localhost:3000/api/search?query=Citrix' `
@@ -103,5 +124,6 @@ $dashboard = Invoke-WithRetry -Description 'Grafana dashboard lookup' @retryPara
     Metrics = 'Valid'
     MetricLines = @($metrics -split "`n").Count
     PrometheusTarget = $prometheus.data.result[0].value[1]
+    AlertRules = @($alertRules).Count
     GrafanaDashboard = $dashboard.uid
 }

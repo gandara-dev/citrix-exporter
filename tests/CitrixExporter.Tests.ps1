@@ -30,14 +30,49 @@ AfterAll {
 
 Describe 'Synthetic Citrix metrics' {
     It 'exports VDA, session, logon, license, and MCS metrics' {
-        $metrics = Get-CitrixMetric -Simulation
+        $at = [DateTimeOffset]::new(2026, 9, 28, 13, 30, 0, [TimeSpan]::Zero)
+        $metrics = Get-CitrixMetric -Simulation -At $at
 
-        $metrics | Should -Match 'citrix_vdas\{delivery_group="Finance Apps",registration_state="Unregistered"\} 1'
-        $metrics | Should -Match 'citrix_sessions\{delivery_group="Engineering Desktops",state="Active",protocol="HDX"\} 2'
-        $metrics | Should -Match 'citrix_logon_duration_seconds\{delivery_group="Finance Apps"\}'
-        $metrics | Should -Match 'citrix_licenses_in_use\{feature="XDT_ENT_UD"\} 184'
-        $metrics | Should -Match 'citrix_mcs_catalog_machines\{catalog="MCS Engineering"\} 4'
+        $metrics | Should -Match 'citrix_vdas\{delivery_group="Engineering Desktops",registration_state="Unregistered"\} 1'
+        $metrics | Should -Match 'citrix_sessions\{delivery_group="Engineering Desktops",state="Active",protocol="HDX"\} 44'
+        $metrics | Should -Match 'citrix_logon_duration_seconds\{delivery_group="Finance Apps"\} 12\.1'
+        $metrics | Should -Match 'citrix_licenses_in_use\{feature="XDT_ENT_UD"\} 61'
+        $metrics | Should -Match 'citrix_mcs_catalog_machines\{catalog="MCS Engineering"\} 60'
         $metrics | Should -Not -Match 'Physical Devices.*citrix_mcs_catalog'
+    }
+
+    It 'follows the workday load curve' {
+        $night = Get-CitrixMetricSnapshot -Simulation -At ([DateTimeOffset]::new(2026, 9, 28, 3, 0, 0, [TimeSpan]::Zero))
+        $peak = Get-CitrixMetricSnapshot -Simulation -At ([DateTimeOffset]::new(2026, 9, 28, 13, 30, 0, [TimeSpan]::Zero))
+
+        @($night.Sessions).Count | Should -BeLessThan 10
+        @($peak.Sessions).Count | Should -BeGreaterThan 80
+        @($peak.Machines).Count | Should -Be 110
+    }
+
+    It 'applies a scenario and caps license use at the pool size' {
+        $scenario = [pscustomobject]@{
+            loadPercent = 100
+            unregisteredVdas = [pscustomobject]@{ 'Finance Apps' = 8 }
+            logonSlowdownSeconds = 30
+            licenseTotals = [pscustomobject]@{ XDT_ENT_UD = 60 }
+        }
+        $at = [DateTimeOffset]::new(2026, 9, 28, 13, 30, 0, [TimeSpan]::Zero)
+        $metrics = Get-CitrixMetric -Simulation -Scenario $scenario -At $at
+
+        $metrics | Should -Match 'citrix_vdas\{delivery_group="Finance Apps",registration_state="Unregistered"\} 8'
+        $metrics | Should -Match 'citrix_licenses_in_use\{feature="XDT_ENT_UD"\} 60'
+        $metrics | Should -Match 'citrix_logon_duration_seconds\{delivery_group="Engineering Desktops"\} 4\d\.\d'
+    }
+
+    It 'rejects an invalid scenario value' {
+        { Get-CitrixMetric -Simulation -Scenario @{ loadPercent = 101 } } |
+            Should -Throw "Scenario value 'loadPercent' must be a whole number from 0 to 100."
+    }
+
+    It 'accepts a scenario only in simulation mode' {
+        { Get-CitrixMetricSnapshot -Scenario @{ loadPercent = 50 } } |
+            Should -Throw 'Scenario and At can only be used with -Simulation.'
     }
 
     It 'uses only fictional environment names' {
@@ -151,3 +186,24 @@ Describe 'Citrix Broker SDK provider' {
             Should -Throw 'LmstatPath is required when LicenseServer is provided.'
     }
 }
+
+Describe 'Metrics Playground contract' {
+    It 'keeps the shared playground fixtures in sync with the module' {
+        $generated = Join-Path $TestDrive 'playground-cases.json'
+        & (Join-Path $PSScriptRoot 'Update-PlaygroundFixtures.ps1') -OutputPath $generated
+        (Get-Content -LiteralPath $generated -Raw) -replace "`r`n", "`n" |
+            Should -BeExactly ((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fixtures/playground-cases.json') -Raw) -replace "`r`n", "`n")
+    }
+
+    It 'ships the example scenarios in a valid format' {
+        foreach ($file in Get-ChildItem -Path (Join-Path $PSScriptRoot '../scenarios') -Filter '*.json') {
+            # Validate the values the way Start-CitrixExporter does at startup;
+            # the failure switches only take effect on each scrape.
+            $scenario = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json |
+                Select-Object -Property * -ExcludeProperty brokerDown, licensingDown
+            { Get-CitrixMetricSnapshot -Simulation -Scenario $scenario -At ([DateTimeOffset]::UtcNow) } |
+                Should -Not -Throw -Because $file.Name
+        }
+    }
+}
+

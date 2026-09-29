@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metrics Playground | Citrix Exporter</title>
+  <meta name="description" content="Change a synthetic Citrix site and watch the exporter's /metrics output and Prometheus alerts react.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <a href="https://github.com/gandara-dev/citrix-exporter">Citrix Exporter</a>
+      <span class="sep">/</span>
+      <span>Metrics Playground</span>
+      <span class="tag" title="Fictional site generated in your browser. Nothing connects to Citrix.">synthetic data</span>
+    </div>
+    <nav>
+      <a href="https://github.com/gandara-dev/citrix-exporter#readme">Docs</a>
+      <a href="https://github.com/gandara-dev/citrix-exporter">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="wrap">
+    <div class="toolbar">
+      <div class="presets" id="presets" role="group" aria-label="Scenarios"></div>
+      <div class="clock" role="group" aria-label="Clock">
+        <button type="button" class="seg" id="clock-live" aria-pressed="false"><span class="dot"></span>Live</button>
+        <button type="button" class="seg" id="clock-replay" aria-pressed="false">Replay day</button>
+        <input type="range" id="time" min="0" max="1430" step="10" aria-label="Time of day (UTC)">
+        <output id="time-out" class="mono"></output>
+      </div>
+    </div>
+
+    <div class="grid">
+      <aside class="panel controls" aria-label="Site controls">
+        <div class="panel-head">
+          <h2>Site</h2>
+          <button type="button" class="link" id="reset">Reset</button>
+        </div>
+
+        <div class="ctl">
+          <div class="ctl-head"><label for="load">Load</label><output id="load-out"></output><button type="button" class="auto" id="load-auto" title="Follow the daily load curve">auto</button></div>
+          <input type="range" id="load" min="0" max="100">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="slowdown">Logon delay</label><output id="slow-out"></output></div>
+          <input type="range" id="slowdown" min="0" max="120">
+        </div>
+
+        <h3>Unregistered VDAs</h3>
+        <div id="vda-controls"></div>
+
+        <h3>License pools</h3>
+        <label class="num"><span>MPS_ENT_CCU</span><input type="number" id="lic-MPS_ENT_CCU" min="0" max="100000" step="1" inputmode="numeric"></label>
+        <label class="num"><span>XDT_ENT_UD</span><input type="number" id="lic-XDT_ENT_UD" min="0" max="100000" step="1" inputmode="numeric"></label>
+
+        <h3>Failures</h3>
+        <label class="switch"><input type="checkbox" id="broker-down"><span>Broker SDK down</span></label>
+        <label class="switch"><input type="checkbox" id="licensing-down"><span>License server down</span></label>
+
+        <div class="error" id="scenario-error" role="alert"></div>
+
+        <div class="panel-foot">
+          <label class="btn" for="open-file">Import</label>
+          <input type="file" id="open-file" accept="application/json,.json" class="sr-only">
+          <button type="button" class="btn" id="download-scenario">Export scenario</button>
+        </div>
+        <details class="docker">
+          <summary>Replay in Docker Compose</summary>
+          <p>The page stands in for the full stack. To run the real exporter, Prometheus, and Grafana with this scenario, save the export in <code>scenarios/</code>, then:</p>
+          <code class="cmd">EXPORTER_SCENARIO=scenario.json docker compose up --build</code>
+          <p>Grafana opens at <code>localhost:3000</code>, Prometheus at <code>localhost:9090</code>.</p>
+        </details>
+      </aside>
+
+      <main class="dash">
+        <div class="src-row"><span class="src">Prometheus</span><span class="src-note">alert rules from <code>monitoring/alerts.yml</code></span></div>
+        <div class="status" id="status" aria-live="polite"></div>
+        <div class="src-row"><span class="src">Grafana</span><span class="src-note">the panels of the <a href="https://github.com/gandara-dev/citrix-exporter#grafana-dashboard">real dashboard</a>, drawn from the same metrics</span></div>
+        <dl class="kpis" id="kpis"></dl>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div class="tabs" role="tablist" aria-label="Chart">
+              <button type="button" role="tab" id="tab-sessions" aria-selected="true">Sessions</button>
+              <button type="button" role="tab" id="tab-logon" aria-selected="false">Logon duration</button>
+            </div>
+            <div class="legend" id="legend"></div>
+          </div>
+          <div class="chart" id="chart"></div>
+        </section>
+
+        <section class="panel">
+          <table class="groups" id="groups"></table>
+        </section>
+      </main>
+
+      <section class="term" aria-label="Exporter output">
+        <div class="term-head">
+          <span class="src term-src">Exporter</span>
+          <span class="mono"><b>GET</b> /metrics</span>
+          <span class="code" id="term-status"></span>
+          <span class="spacer"></span>
+          <label class="term-toggle"><input type="checkbox" id="show-comments"> HELP/TYPE</label>
+          <button type="button" id="copy-metrics">Copy</button>
+        </div>
+        <pre id="metrics" tabindex="0" aria-label="Prometheus exposition text"></pre>
+      </section>
+    </div>
+
+    <footer>
+      Fictional site, same engine as the exporter's <code>-Simulation</code> mode. It shows the output contract and alert logic, not a real deployment.
+      <a href="https://github.com/gandara-dev/citrix-exporter/blob/main/docs/release-verification.md">Release verification</a>
+    </footer>
+  </div>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

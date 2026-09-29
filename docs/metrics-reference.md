@@ -92,28 +92,20 @@ is different from a failed collection, which sets
 `citrix_exporter_scrape_success` to `0` and suppresses all Citrix series for that
 request.
 
-## Suggested alerts
+## Alert rules
 
-Collection failure lasting five minutes:
+[`monitoring/alerts.yml`](../monitoring/alerts.yml) ships four example rules,
+covered by `promtool` unit tests in `monitoring/alerts.test.yml`:
 
-```promql
-min_over_time(citrix_exporter_scrape_success[5m]) == 0
-```
+| Alert | Condition | `for` |
+|---|---|---|
+| `CitrixExporterCollectionFailing` | `citrix_exporter_scrape_success == 0` | 5m |
+| `CitrixVdasUnregistered` | more than 5% of a delivery group's VDAs unregistered | 10m |
+| `CitrixLicensesNearlyExhausted` | more than 90% of a feature's licenses in use | 15m |
+| `CitrixSlowLogons` | average logon above 30 s in a delivery group | 15m |
 
-Any unregistered VDA:
-
-```promql
-sum(citrix_vdas{registration_state="Unregistered"}) > 0
-```
-
-License utilization above 90 percent:
-
-```promql
-(citrix_licenses_in_use / citrix_licenses) > 0.9
-```
-
-Tune thresholds, `for` durations, and routing to the environment. The examples
-are queries, not production alert policy.
+Tune thresholds, `for` durations, and routing to the environment. The rules are
+a starting point, not production alert policy.
 
 ## Compatibility policy
 

@@ -2,7 +2,18 @@ services:
   exporter:
     build:
       context: .
-    command: ["-ListenAddress", "0.0.0.0", "-Port", "9187", "-Simulation"]
+    # Set EXPORTER_SCENARIO to a file in ./scenarios to replay a synthetic incident,
+    # for example EXPORTER_SCENARIO=slow-logons.json docker compose up --build.
+    command:
+      - -ListenAddress
+      - 0.0.0.0
+      - -Port
+      - "9187"
+      - -Simulation
+      - -ScenarioPath
+      - ${EXPORTER_SCENARIO:+/app/scenarios/${EXPORTER_SCENARIO}}
+    volumes:
+      - ./scenarios:/app/scenarios:ro
     ports:
       - "9187:9187"
     healthcheck:
@@ -26,6 +37,8 @@ services:
       - --storage.tsdb.path=/prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./monitoring/alerts.test.yml:/etc/prometheus/alerts.test.yml:ro
     ports:
       - "9090:9090"
     depends_on:

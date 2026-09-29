@@ -25,6 +25,31 @@ The global Broker command stubs exist only so the module can resolve commands
 during tests. Pester module mocks provide all returned objects; no Controller is
 contacted.
 
+## Metrics Playground tests
+
+Requirements: Node.js 22 or newer. No packages are installed.
+
+```powershell
+node --test tests/web/*.test.mjs
+```
+
+`site/lib/playground.js` duplicates the synthetic site and the Prometheus
+renderer so the page can run without a server. The Node suite compares its
+output byte for byte with `tests/fixtures/playground-cases.json`, which
+`tests/Update-PlaygroundFixtures.ps1` generates from the PowerShell module. It
+also checks the page presets against `scenarios/*.json`, the page version
+against the module manifest, and the alert thresholds and `for` periods against
+`monitoring/alerts.yml`.
+
+Pester fails when the fixtures are stale. After changing the synthetic site or
+the renderer, regenerate them and rerun both suites:
+
+```powershell
+./tests/Update-PlaygroundFixtures.ps1
+Invoke-Pester -Path ./tests/CitrixExporter.Tests.ps1 -CI
+node --test tests/web/*.test.mjs
+```
+
 ## Static analysis
 
 ```powershell
@@ -62,6 +87,10 @@ PowerShell appends a trailing CRLF record that older `promtool` parsers reject
 as an invalid metric name. The acceptance script uses the portable form above
 and also checks the landing page, health endpoint, Prometheus target, and
 provisioned Grafana dashboard.
+
+The script also runs `promtool check rules` and `promtool test rules` on
+`monitoring/alerts.yml` and `monitoring/alerts.test.yml`, then confirms that
+Prometheus loaded the four expected alert rules.
 
 Always stop the stack after testing:
 

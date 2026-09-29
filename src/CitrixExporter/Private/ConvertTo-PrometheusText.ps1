@@ -56,7 +56,7 @@ function ConvertTo-CitrixPrometheusText {
     $lines.Add('# HELP citrix_logon_duration_seconds Average session logon duration by delivery group.')
     $lines.Add('# TYPE citrix_logon_duration_seconds gauge')
     foreach ($group in $Snapshot.Sessions | Group-Object DeliveryGroup | Sort-Object Name) {
-        $average = ($group.Group | Measure-Object LogonDurationSeconds -Average).Average
+        $average = [Math]::Round(($group.Group | Measure-Object LogonDurationSeconds -Average).Average, 3)
         $lines.Add((Format-PrometheusSample -Name 'citrix_logon_duration_seconds' -Labels ([ordered]@{
             delivery_group = $group.Name
         }) -Value $average))
@@ -104,7 +104,7 @@ function Get-CitrixExporterSelfMetric {
         "citrix_exporter_scrape_errors_total $ErrorCount"
         '# HELP citrix_exporter_build_info Exporter build and operating mode information.'
         '# TYPE citrix_exporter_build_info gauge'
-        "citrix_exporter_build_info{version=`"0.1.1`",mode=`"$Mode`"} 1"
+        "citrix_exporter_build_info{version=`"$script:ExporterVersion`",mode=`"$Mode`"} 1"
     )
     return ($lines -join "`n") + "`n"
 }

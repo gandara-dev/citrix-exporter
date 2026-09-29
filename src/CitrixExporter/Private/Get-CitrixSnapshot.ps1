@@ -1,54 +1,183 @@
+# Synthetic Citrix site used by -Simulation and by the Metrics Playground page.
+#
+# Every value is computed with integer arithmetic from the scenario and the
+# collection minute, so site/lib/playground.js reproduces the output byte for
+# byte. The names are fictional. Keep both implementations and the fixtures in
+# tests/fixtures in sync.
+
+$script:SyntheticGroups = @(
+    [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; Catalog = 'MCS Windows 11'; ProvisioningType = 'MCS'; Machines = 40; License = 'MPS_ENT_CCU'; Seed = 1 }
+    [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; Catalog = 'MCS Engineering'; ProvisioningType = 'MCS'; Machines = 60; License = 'XDT_ENT_UD'; Seed = 2 }
+    [pscustomobject]@{ DeliveryGroup = 'Remote PCs'; Catalog = 'Physical Devices'; ProvisioningType = 'Manual'; Machines = 10; License = 'XDT_ENT_UD'; Seed = 3 }
+)
+
+# Percent of registered VDAs in use at the start of each UTC hour.
+$script:SyntheticLoadCurve = @(4, 3, 3, 3, 4, 8, 20, 45, 70, 85, 90, 92, 88, 90, 92, 88, 80, 60, 35, 20, 12, 8, 6, 5)
+
+$script:SyntheticDefaults = [ordered]@{
+    loadPercent = $null
+    disconnectedPercent = 15
+    logonSlowdownSeconds = 0
+    unregisteredVdas = $null
+    licenseTotals = [ordered]@{ MPS_ENT_CCU = 50; XDT_ENT_UD = 80 }
+    brokerDown = $false
+    licensingDown = $false
+}
+
+function Get-SyntheticScenarioValue {
+    param($Scenario, [string]$Name)
+
+    if ($null -ne $Scenario) {
+        if ($Scenario -is [System.Collections.IDictionary]) {
+            if ($Scenario.Contains($Name)) { return , $Scenario[$Name] }
+        }
+        elseif ($null -ne $Scenario.PSObject.Properties[$Name]) {
+            return , $Scenario.$Name
+        }
+    }
+    return , $script:SyntheticDefaults[$Name]
+}
+
+function Get-SyntheticMapValue {
+    param($Map, [string]$Key)
+
+    if ($null -eq $Map) { return $null }
+    if ($Map -is [System.Collections.IDictionary]) {
+        if ($Map.Contains($Key)) { return $Map[$Key] }
+        return $null
+    }
+    $property = $Map.PSObject.Properties[$Key]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Assert-SyntheticInteger {
+    param($Value, [string]$Name, [long]$Minimum, [long]$Maximum)
+
+    $isInteger = ($Value -is [int]) -or ($Value -is [long]) -or ($Value -is [int16]) -or ($Value -is [byte])
+    if (-not $isInteger -or $Value -lt $Minimum -or $Value -gt $Maximum) {
+        throw "Scenario value '$Name' must be a whole number from $Minimum to $Maximum."
+    }
+    return [long]$Value
+}
+
+function Get-SyntheticJitter {
+    param([long]$Minute, [long]$Seed)
+    return (($Minute * 7919 + $Seed * 104729) % 101) - 50
+}
+
 function Get-SimulatedCitrixSnapshot {
     param(
         [ValidateSet('Broker', 'Licensing')]
-        [string[]]$InjectFailureSource = @()
+        [string[]]$InjectFailureSource = @(),
+
+        $Scenario,
+
+        [DateTimeOffset]$At = [DateTimeOffset]::UtcNow
     )
 
-    if ($InjectFailureSource -contains 'Broker') {
+    $brokerDown = [bool](Get-SyntheticScenarioValue $Scenario 'brokerDown')
+    $licensingDown = [bool](Get-SyntheticScenarioValue $Scenario 'licensingDown')
+    if ($brokerDown -or $InjectFailureSource -contains 'Broker') {
         throw 'Injected Broker collection failure.'
     }
 
-    $machines = @(
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; Catalog = 'MCS Windows 11'; RegistrationState = 'Registered' }
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; Catalog = 'MCS Windows 11'; RegistrationState = 'Registered' }
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; Catalog = 'MCS Windows 11'; RegistrationState = 'Unregistered' }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; Catalog = 'MCS Engineering'; RegistrationState = 'Registered' }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; Catalog = 'MCS Engineering'; RegistrationState = 'Registered' }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; Catalog = 'MCS Engineering'; RegistrationState = 'Registered' }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; Catalog = 'MCS Engineering'; RegistrationState = 'Unregistered' }
-        [pscustomobject]@{ DeliveryGroup = 'Remote PCs'; Catalog = 'Physical Devices'; RegistrationState = 'Registered' }
-    )
+    $loadOverride = Get-SyntheticScenarioValue $Scenario 'loadPercent'
+    if ($null -ne $loadOverride) {
+        $loadOverride = Assert-SyntheticInteger $loadOverride 'loadPercent' 0 100
+    }
+    $disconnectedPercent = Assert-SyntheticInteger (Get-SyntheticScenarioValue $Scenario 'disconnectedPercent') 'disconnectedPercent' 0 100
+    $slowdown = Assert-SyntheticInteger (Get-SyntheticScenarioValue $Scenario 'logonSlowdownSeconds') 'logonSlowdownSeconds' 0 600
+    $unregisteredMap = Get-SyntheticScenarioValue $Scenario 'unregisteredVdas'
+    $licenseTotals = Get-SyntheticScenarioValue $Scenario 'licenseTotals'
 
-    $sessions = @(
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; State = 'Active'; Protocol = 'HDX'; LogonDurationSeconds = 8.4 }
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; State = 'Active'; Protocol = 'HDX'; LogonDurationSeconds = 11.7 }
-        [pscustomobject]@{ DeliveryGroup = 'Finance Apps'; State = 'Disconnected'; Protocol = 'HDX'; LogonDurationSeconds = 9.2 }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; State = 'Active'; Protocol = 'HDX'; LogonDurationSeconds = 14.1 }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; State = 'Active'; Protocol = 'HDX'; LogonDurationSeconds = 12.3 }
-        [pscustomobject]@{ DeliveryGroup = 'Engineering Desktops'; State = 'Disconnected'; Protocol = 'HDX'; LogonDurationSeconds = 16.8 }
-    )
+    $minute = [long][Math]::Floor($At.ToUnixTimeSeconds() / 60)
+    $hour = [int]([Math]::Floor($minute / 60) % 24)
+    $minuteOfHour = [int]($minute % 60)
+    $baseLoad = if ($null -ne $loadOverride) {
+        $loadOverride * 60
+    }
+    else {
+        $script:SyntheticLoadCurve[$hour] * (60 - $minuteOfHour) +
+            $script:SyntheticLoadCurve[($hour + 1) % 24] * $minuteOfHour
+    }
 
-    $catalogs = @(
-        [pscustomobject]@{ Name = 'MCS Windows 11'; ProvisioningType = 'MCS'; MachineCount = 3 }
-        [pscustomobject]@{ Name = 'MCS Engineering'; ProvisioningType = 'MCS'; MachineCount = 4 }
-        [pscustomobject]@{ Name = 'Physical Devices'; ProvisioningType = 'Manual'; MachineCount = 1 }
-    )
+    $machines = [System.Collections.Generic.List[object]]::new()
+    $sessions = [System.Collections.Generic.List[object]]::new()
+    $catalogs = [System.Collections.Generic.List[object]]::new()
+    $inUse = @{}
 
-    if ($InjectFailureSource -contains 'Licensing') {
+    foreach ($group in $script:SyntheticGroups) {
+        $override = Get-SyntheticMapValue $unregisteredMap $group.DeliveryGroup
+        if ($null -ne $override) {
+            $unregistered = Assert-SyntheticInteger $override "unregisteredVdas.$($group.DeliveryGroup)" 0 $group.Machines
+        }
+        else {
+            $pick = ($minute * 31 + $group.Seed * 17) % 23
+            $unregistered = if ($pick -eq 0) { 2 } elseif ($pick -lt 3) { 1 } else { 0 }
+        }
+        $registered = $group.Machines - $unregistered
+
+        for ($index = 0; $index -lt $group.Machines; $index++) {
+            $state = if ($index -lt $registered) { 'Registered' } else { 'Unregistered' }
+            $machines.Add([pscustomobject]@{
+                DeliveryGroup = $group.DeliveryGroup
+                Catalog = $group.Catalog
+                RegistrationState = $state
+            })
+        }
+
+        $load = $baseLoad
+        if ($null -eq $loadOverride) {
+            $load = [Math]::Min(6000, [Math]::Max(0, $baseLoad + (Get-SyntheticJitter $minute $group.Seed) * 6))
+        }
+        $sessionCount = [long][Math]::Floor(($registered * $load + 3000) / 6000)
+        $disconnected = [long][Math]::Floor(($sessionCount * $disconnectedPercent + 50) / 100)
+        $logonTenths = 85 + $group.Seed * 10 + [long][Math]::Floor($load / 200) +
+            ((($minute * 13 + $group.Seed * 7) % 21) - 10) + $slowdown * 10
+        $logonSeconds = [Math]::Max(10, $logonTenths) / 10
+
+        for ($index = 0; $index -lt $sessionCount; $index++) {
+            $state = if ($index -lt $sessionCount - $disconnected) { 'Active' } else { 'Disconnected' }
+            $sessions.Add([pscustomobject]@{
+                DeliveryGroup = $group.DeliveryGroup
+                State = $state
+                Protocol = 'HDX'
+                LogonDurationSeconds = $logonSeconds
+            })
+        }
+
+        $catalogs.Add([pscustomobject]@{
+            Name = $group.Catalog
+            ProvisioningType = $group.ProvisioningType
+            MachineCount = $group.Machines
+        })
+        $inUse[$group.License] = [long]$inUse[$group.License] + $sessionCount
+    }
+
+    if ($licensingDown -or $InjectFailureSource -contains 'Licensing') {
         throw 'Injected Licensing collection failure.'
     }
 
-    $licenses = @(
-        [pscustomobject]@{ Feature = 'XDT_ENT_UD'; Total = 250; InUse = 184 }
-        [pscustomobject]@{ Feature = 'MPS_ENT_CCU'; Total = 100; InUse = 61 }
-    )
+    $licenses = foreach ($feature in @('MPS_ENT_CCU', 'XDT_ENT_UD')) {
+        $total = Get-SyntheticMapValue $licenseTotals $feature
+        if ($null -eq $total) {
+            $total = $script:SyntheticDefaults.licenseTotals[$feature]
+        }
+        $total = Assert-SyntheticInteger $total "licenseTotals.$feature" 0 100000
+        [pscustomobject]@{
+            Feature = $feature
+            Total = $total
+            InUse = [Math]::Min($total, [long]$inUse[$feature])
+        }
+    }
 
     return [pscustomobject]@{
-        CollectedAt = [DateTimeOffset]::UtcNow
-        Machines = $machines
-        Sessions = $sessions
-        Catalogs = $catalogs
-        Licenses = $licenses
+        CollectedAt = $At
+        Machines = $machines.ToArray()
+        Sessions = $sessions.ToArray()
+        Catalogs = $catalogs.ToArray()
+        Licenses = @($licenses)
     }
 }
 

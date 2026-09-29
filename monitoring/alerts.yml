@@ -1,0 +1,47 @@
+groups:
+  - name: citrix-exporter
+    rules:
+      - alert: CitrixExporterCollectionFailing
+        expr: citrix_exporter_scrape_success == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Citrix metric collection is failing
+          description: >-
+            The exporter is reachable but cannot collect from the Broker or
+            licensing source, so Citrix data metrics are missing.
+
+      - alert: CitrixVdasUnregistered
+        expr: >-
+          sum by (delivery_group) (citrix_vdas{registration_state="Unregistered"})
+          / sum by (delivery_group) (citrix_vdas) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of VDAs are unregistered in {{ $labels.delivery_group }}
+          description: >-
+            Check controller DNS, VDA services, and machine power state for the
+            delivery group.
+
+      - alert: CitrixLicensesNearlyExhausted
+        expr: citrix_licenses_in_use / citrix_licenses > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 90% of {{ $labels.feature }} licenses are in use
+          description: >-
+            New connections may be refused when the pool is exhausted. Review
+            license allocation and idle sessions.
+
+      - alert: CitrixSlowLogons
+        expr: citrix_logon_duration_seconds > 30
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Average logon duration above 30 seconds in {{ $labels.delivery_group }}
+          description: >-
+            Break the logon down with Director or WEM to find the slow phase.

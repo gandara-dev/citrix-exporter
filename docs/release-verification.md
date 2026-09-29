@@ -9,6 +9,10 @@ Every change must pass:
 - PSScriptAnalyzer, actionlint, JSON parsing, and Mermaid rendering;
 - a clean Docker Compose build with the exporter, Prometheus, and Grafana;
 - `promtool` validation of the live `/metrics` response;
+- `promtool` syntax checks and unit tests for the alert rules, and a Prometheus
+  query proving the four rules are loaded;
+- Metrics Playground tests proving the browser engine matches the PowerShell
+  module byte for byte on the shared fixtures;
 - a Prometheus query proving the exporter target is up;
 - Grafana API discovery of the provisioned `citrix-vdi-overview` dashboard;
 - a degraded-mode run proving that a Broker failure keeps HTTP available,
@@ -26,6 +30,10 @@ finally {
     docker compose down --volumes
 }
 ```
+
+The playground and scenario files exercise the same synthetic provider. They
+demonstrate the output contract and alert logic; they are not evidence about a
+real site.
 
 ## Environment acceptance gate
 

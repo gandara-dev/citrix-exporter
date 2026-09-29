@@ -1,0 +1,97 @@
+# Unit tests for alerts.yml. Run with: promtool test rules alerts.test.yml
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: collection failure fires after five minutes
+    interval: 1m
+    input_series:
+      - series: citrix_exporter_scrape_success{job="citrix-exporter"}
+        values: 1 0x10
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: CitrixExporterCollectionFailing
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: CitrixExporterCollectionFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: citrix-exporter
+            exp_annotations:
+              summary: Citrix metric collection is failing
+              description: >-
+                The exporter is reachable but cannot collect from the Broker or
+                licensing source, so Citrix data metrics are missing.
+
+  - name: unregistered VDAs above 5% of a delivery group
+    interval: 1m
+    input_series:
+      - series: citrix_vdas{delivery_group="Finance Apps",registration_state="Registered"}
+        values: 32x20
+      - series: citrix_vdas{delivery_group="Finance Apps",registration_state="Unregistered"}
+        values: 8x20
+      - series: citrix_vdas{delivery_group="Engineering Desktops",registration_state="Registered"}
+        values: 59x20
+      - series: citrix_vdas{delivery_group="Engineering Desktops",registration_state="Unregistered"}
+        values: 1x20
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: CitrixVdasUnregistered
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              delivery_group: Finance Apps
+            exp_annotations:
+              summary: More than 5% of VDAs are unregistered in Finance Apps
+              description: >-
+                Check controller DNS, VDA services, and machine power state for the
+                delivery group.
+
+  - name: license pool above 90%
+    interval: 1m
+    input_series:
+      - series: citrix_licenses{feature="XDT_ENT_UD"}
+        values: 60x20
+      - series: citrix_licenses_in_use{feature="XDT_ENT_UD"}
+        values: 60x20
+      - series: citrix_licenses{feature="MPS_ENT_CCU"}
+        values: 50x20
+      - series: citrix_licenses_in_use{feature="MPS_ENT_CCU"}
+        values: 35x20
+    alert_rule_test:
+      - eval_time: 17m
+        alertname: CitrixLicensesNearlyExhausted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              feature: XDT_ENT_UD
+            exp_annotations:
+              summary: More than 90% of XDT_ENT_UD licenses are in use
+              description: >-
+                New connections may be refused when the pool is exhausted. Review
+                license allocation and idle sessions.
+
+  - name: slow logons need fifteen minutes above 30 seconds
+    interval: 1m
+    input_series:
+      - series: citrix_logon_duration_seconds{delivery_group="Engineering Desktops"}
+        values: 45x20
+      - series: citrix_logon_duration_seconds{delivery_group="Finance Apps"}
+        values: 12x20
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CitrixSlowLogons
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: CitrixSlowLogons
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              delivery_group: Engineering Desktops
+            exp_annotations:
+              summary: Average logon duration above 30 seconds in Engineering Desktops
+              description: >-
+                Break the logon down with Director or WEM to find the slow phase.

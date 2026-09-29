@@ -10,7 +10,11 @@ function Get-CitrixMetric {
 
         [string]$LmstatPath,
 
-        [string]$LicenseServer
+        [string]$LicenseServer,
+
+        $Scenario,
+
+        [Nullable[DateTimeOffset]]$At
     )
 
     $snapshotParameters = @{
@@ -19,6 +23,8 @@ function Get-CitrixMetric {
         AdminAddress = $AdminAddress
         LmstatPath = $LmstatPath
         LicenseServer = $LicenseServer
+        Scenario = $Scenario
+        At = $At
     }
     $snapshot = Get-CitrixMetricSnapshot @snapshotParameters
     return ConvertTo-CitrixPrometheusText -Snapshot $snapshot

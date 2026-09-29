@@ -39,9 +39,23 @@ function Start-CitrixExporter {
 
         [string]$LicenseServer,
 
+        [string]$ScenarioPath,
+
         [ValidateRange(0, [int]::MaxValue)]
         [int]$MaxRequests = 0
     )
+
+    $scenario = $null
+    if (-not [string]::IsNullOrWhiteSpace($ScenarioPath)) {
+        if (-not $Simulation) {
+            throw 'ScenarioPath can only be used with -Simulation.'
+        }
+        $scenario = Get-Content -LiteralPath $ScenarioPath -Raw | ConvertFrom-Json
+        # Validate the values once at startup so a bad file fails fast; the
+        # failure switches are honored on every scrape instead.
+        $probe = $scenario | Select-Object -Property * -ExcludeProperty brokerDown, licensingDown
+        $null = Get-SimulatedCitrixSnapshot -Scenario $probe
+    }
 
     if (-not $PSCmdlet.ShouldProcess("${ListenAddress}:$Port", 'Start Citrix Exporter listener')) {
         return
@@ -97,6 +111,7 @@ function Start-CitrixExporter {
                                 AdminAddress = $AdminAddress
                                 LmstatPath = $LmstatPath
                                 LicenseServer = $LicenseServer
+                                Scenario = $scenario
                             }
                             $metrics = Get-CitrixMetric @parameters
                             $timer.Stop()
