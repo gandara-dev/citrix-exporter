@@ -6,18 +6,17 @@ import {
   scrape,
   syntheticSnapshot,
 } from './lib/playground.js';
-import { ALERT_FOR, PRESETS, VERSION } from './lib/presets.js';
+import { ALERT_RULES, PRESETS, VERSION } from './lib/presets.js';
 
 const $ = (id) => document.getElementById(id);
 const FEATURES = ['MPS_ENT_CCU', 'XDT_ENT_UD'];
-const TOTAL_VDAS = GROUPS.reduce((sum, group) => sum + group.machines, 0);
 const SCRAPE_INTERVAL_MS = 5000;
-const REPLAY_INTERVAL_MS = 350;
+const REPLAY_INTERVAL_MS = 400;
 const STEP_MINUTES = 10;
+const MAX_FOR_MINUTES = 15;
 const SVG = 'http://www.w3.org/2000/svg';
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const initialState = () => ({
+const blankSite = () => ({
   followCurve: true,
   load: 60,
   disconnected: DEFAULTS.disconnectedPercent,
@@ -29,16 +28,17 @@ const initialState = () => ({
 });
 
 const state = {
-  ...initialState(),
+  ...blankSite(),
   clock: 'replay', // live | replay | pinned
-  minuteOfDay: 360,
+  minuteOfDay: 7 * 60,
   preset: 'normal-day',
-  tab: 'sessions',
+  panel: 'sessions',
   showComments: false,
   errorCount: 0,
 };
 
 let previousValues = null;
+let lastText = '';
 
 // ------------------------------------------------------------------ helpers
 
@@ -46,10 +46,9 @@ const escapeHtml = (text) => String(text)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const pad = (number) => String(number).padStart(2, '0');
 const clockText = (minute) => `${pad(Math.floor(minute / 60) % 24)}:${pad(minute % 60)}`;
-const color = (index) => `var(--s${index + 1})`;
-const swatch = (index) => `<span class="swatch" style="background:${color(index)}"></span>`;
 const dayStart = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 const minuteOf = (date) => date.getUTCHours() * 60 + date.getUTCMinutes();
+const swatch = (colorVar) => `<span class="swatch" style="background:var(${colorVar})"></span>`;
 
 function svg(tag, attributes, parent) {
   const element = document.createElementNS(SVG, tag);
@@ -87,7 +86,7 @@ function applyScenario(scenario, presetId = null) {
   const { brokerDown, licensingDown, ...values } = scenario;
   syntheticSnapshot(values, new Date());
 
-  Object.assign(state, initialState());
+  Object.assign(state, blankSite());
   if (values.loadPercent !== undefined && values.loadPercent !== null) {
     state.followCurve = false;
     state.load = values.loadPercent;
@@ -114,27 +113,27 @@ function showError(message) {
 // ----------------------------------------------------------------- controls
 
 function buildControls() {
+  const select = $('preset');
   for (const preset of PRESETS) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = preset.label;
-    button.title = preset.description;
-    button.dataset.preset = preset.id;
-    button.addEventListener('click', () => {
-      applyScenario(structuredClone(preset.scenario), preset.id);
-      update();
-    });
-    $('presets').appendChild(button);
+    select.add(new Option(preset.label, preset.id));
   }
+  select.add(new Option('custom', 'custom'));
+  select.addEventListener('change', () => {
+    const preset = PRESETS.find((item) => item.id === select.value);
+    if (!preset) return;
+    applyScenario(structuredClone(preset.scenario), preset.id);
+    update();
+  });
 
   GROUPS.forEach((group, index) => {
     const row = document.createElement('div');
-    row.className = 'ctl';
+    row.className = 'row';
     row.dataset.group = group.deliveryGroup;
-    const id = `vda-${index}`;
     row.innerHTML = `
-      <div class="ctl-head"><label for="${id}">${swatch(index)}${escapeHtml(group.deliveryGroup)}</label><output></output><button type="button" class="auto" title="Random drop-offs that recover on their own">auto</button></div>
-      <input type="range" id="${id}" min="0" max="${group.machines}">`;
+      <label for="vda-${index}">${swatch(`--s${index + 1}`)}${escapeHtml(group.deliveryGroup)}</label>
+      <output></output>
+      <button type="button" class="auto" title="Random drop-offs that recover on their own">auto</button>
+      <input type="range" id="vda-${index}" min="0" max="${group.machines}">`;
     row.querySelector('input').addEventListener('input', (event) => {
       state.unregistered[group.deliveryGroup] = Number(event.target.value);
       edited();
@@ -159,14 +158,12 @@ function buildControls() {
     state.slowdown = Number(event.target.value);
     edited();
   });
-  $('broker-down').addEventListener('change', (event) => {
-    state.brokerDown = event.target.checked;
-    edited();
-  });
-  $('licensing-down').addEventListener('change', (event) => {
-    state.licensingDown = event.target.checked;
-    edited();
-  });
+  for (const [id, key] of [['broker-down', 'brokerDown'], ['licensing-down', 'licensingDown']]) {
+    $(id).addEventListener('change', (event) => {
+      state[key] = event.target.checked;
+      edited();
+    });
+  }
   for (const feature of FEATURES) {
     const input = $(`lic-${feature}`);
     input.addEventListener('change', () => {
@@ -182,7 +179,6 @@ function buildControls() {
   }
   $('reset').addEventListener('click', () => {
     applyScenario({}, 'normal-day');
-    state.clock = 'live';
     update();
   });
 
@@ -193,13 +189,10 @@ function buildControls() {
     state.minuteOfDay = Number(event.target.value);
     update();
   });
-
-  for (const tab of ['sessions', 'logon']) {
-    $(`tab-${tab}`).addEventListener('click', () => {
-      state.tab = tab;
-      update();
-    });
-  }
+  $('panel-select').addEventListener('change', (event) => {
+    state.panel = event.target.value;
+    update();
+  });
   $('show-comments').addEventListener('change', (event) => {
     state.showComments = event.target.checked;
     update();
@@ -208,15 +201,15 @@ function buildControls() {
   $('copy-metrics').addEventListener('click', async (event) => {
     const button = event.currentTarget;
     try {
-      await navigator.clipboard.writeText(lastResult.text);
-      button.textContent = 'Copied';
+      await navigator.clipboard.writeText(lastText);
+      button.textContent = 'copied';
     } catch {
-      button.textContent = 'Failed';
+      button.textContent = 'failed';
     }
-    setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+    setTimeout(() => { button.textContent = 'copy'; }, 1200);
   });
   $('download-scenario').addEventListener('click', () => {
-    const blob = new Blob([`${JSON.stringify(currentScenario(), null, 2)}\n`], { type: 'application/json' });
+    const blob = new Blob([$('scenario-json').textContent], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'scenario.json';
@@ -249,29 +242,26 @@ function setClock(mode) {
   update();
 }
 
-function syncControls() {
-  for (const button of $('presets').children) {
-    button.setAttribute('aria-pressed', String(button.dataset.preset === state.preset));
-  }
-  const at = currentTime();
+function syncControls(at) {
+  $('preset').value = state.preset ?? 'custom';
   $('clock-live').setAttribute('aria-pressed', String(state.clock === 'live'));
   $('clock-replay').setAttribute('aria-pressed', String(state.clock === 'replay'));
-  $('clock-replay').textContent = state.clock === 'replay' ? 'Pause' : 'Replay day';
+  $('clock-replay').textContent = state.clock === 'replay' ? 'pause' : 'replay day';
   $('time').value = Math.floor(minuteOf(at) / STEP_MINUTES) * STEP_MINUTES;
   $('time-out').textContent = `${clockText(minuteOf(at))} UTC`;
 
   $('load').value = state.load;
-  $('load-out').textContent = state.followCurve ? '' : `${state.load}%`;
+  $('load-out').textContent = state.followCurve ? 'daily curve' : `${state.load}%`;
   $('load-auto').setAttribute('aria-pressed', String(state.followCurve));
   // An imported file may exceed the slider range; widen it instead of clamping.
   $('slowdown').max = Math.max(120, state.slowdown);
   $('slowdown').value = state.slowdown;
-  $('slow-out').textContent = state.slowdown ? `+${state.slowdown} s` : 'none';
+  $('slow-out').textContent = `+${state.slowdown} s`;
 
   for (const row of $('vda-controls').children) {
     const count = state.unregistered[row.dataset.group];
     row.querySelector('input').value = count ?? 0;
-    row.querySelector('output').textContent = count === null ? '' : String(count);
+    row.querySelector('output').textContent = count === null ? 'random' : String(count);
     row.querySelector('.auto').setAttribute('aria-pressed', String(count === null));
   }
   for (const feature of FEATURES) {
@@ -280,283 +270,11 @@ function syncControls() {
   }
   $('broker-down').checked = state.brokerDown;
   $('licensing-down').checked = state.licensingDown;
-  $('tab-sessions').setAttribute('aria-selected', String(state.tab === 'sessions'));
-  $('tab-logon').setAttribute('aria-selected', String(state.tab === 'logon'));
 }
 
-// ------------------------------------------------------------------ history
+// ------------------------------------------------------------------ shell
 
-let historyCache = { key: null, points: null };
-
-// One collection every ten minutes of the current UTC day.
-function dayHistory(scenario, at) {
-  const start = dayStart(at);
-  const key = `${start}|${JSON.stringify(scenario)}`;
-  if (historyCache.key === key) return historyCache.points;
-  const points = [];
-  for (let minute = 0; minute <= 1440; minute += STEP_MINUTES) {
-    let snapshot = null;
-    try {
-      snapshot = syntheticSnapshot(scenario, new Date(start + minute * 60000));
-    } catch (error) {
-      if (error instanceof ScenarioError) throw error;
-    }
-    points.push({ minute, snapshot });
-  }
-  historyCache = { key, points };
-  return points;
-}
-
-function groupStats(snapshot) {
-  return GROUPS.map((group) => {
-    const machines = snapshot.machines.filter((item) => item.deliveryGroup === group.deliveryGroup);
-    const sessions = snapshot.sessions.filter((item) => item.deliveryGroup === group.deliveryGroup);
-    const registered = machines.filter((item) => item.registrationState === 'Registered').length;
-    return {
-      name: group.deliveryGroup,
-      machines: machines.length,
-      registered,
-      sessions: sessions.length,
-      disconnected: sessions.filter((item) => item.state === 'Disconnected').length,
-      logon: sessions.length ? sessions.reduce((sum, item) => sum + item.logonDurationSeconds, 0) / sessions.length : null,
-    };
-  });
-}
-
-// ------------------------------------------------------------------- chart
-
-function niceMax(value) {
-  if (value <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  for (const step of [1, 2, 2.5, 5, 10]) if (step * magnitude >= value) return step * magnitude;
-  return 10 * magnitude;
-}
-
-function drawChart(points, nowMinute) {
-  const stacked = state.tab === 'sessions';
-  const threshold = stacked ? null : 30;
-  const width = 640;
-  const height = 230;
-  const m = { top: 10, right: 8, bottom: 22, left: 34 };
-  const plotW = width - m.left - m.right;
-  const plotH = height - m.top - m.bottom;
-  const series = points.map((point) => ({
-    minute: point.minute,
-    values: point.snapshot && groupStats(point.snapshot).map((group) => (stacked ? group.sessions : group.logon)),
-  }));
-
-  let maximum = threshold ? threshold * 1.2 : 0;
-  for (const point of series) {
-    if (!point.values) continue;
-    const values = point.values.map((value) => value ?? 0);
-    maximum = Math.max(maximum, stacked ? values.reduce((a, b) => a + b, 0) : Math.max(...values));
-  }
-  const yMax = niceMax(maximum * 1.05);
-  const x = (minute) => m.left + (minute / 1440) * plotW;
-  const y = (value) => m.top + plotH - (value / yMax) * plotH;
-
-  const root = svg('svg', {
-    viewBox: `0 0 ${width} ${height}`,
-    role: 'img',
-    'aria-label': stacked ? 'Sessions per delivery group over the UTC day' : 'Average logon duration per delivery group over the UTC day',
-  });
-  for (let tick = 0; tick <= 4; tick += 1) {
-    const value = (yMax / 4) * tick;
-    svg('line', { class: 'gridline', x1: m.left, x2: width - m.right, y1: y(value), y2: y(value) }, root);
-    svg('text', { class: 'axis', x: m.left - 6, y: y(value) + 3.5, 'text-anchor': 'end' }, root)
-      .textContent = Number.isInteger(value) ? value : value.toFixed(1);
-  }
-  for (let hour = 0; hour <= 24; hour += 3) {
-    svg('text', { class: 'axis', x: x(hour * 60), y: height - 5, 'text-anchor': hour === 0 ? 'start' : hour === 24 ? 'end' : 'middle' }, root)
-      .textContent = `${pad(hour)}h`;
-  }
-
-  if (!series.some((point) => point.values)) {
-    svg('rect', { class: 'hatch', x: m.left, y: m.top, width: plotW, height: plotH, rx: 4 }, root);
-    svg('text', { class: 'nodata', x: m.left + plotW / 2, y: m.top + plotH / 2, 'text-anchor': 'middle' }, root)
-      .textContent = 'No data — collection is failing';
-  } else if (stacked) {
-    const base = series.map(() => 0);
-    GROUPS.forEach((group, index) => {
-      const top = series.map((point, i) => base[i] + (point.values?.[index] ?? 0));
-      const upper = series.map((point, i) => `${x(point.minute).toFixed(1)},${y(top[i]).toFixed(1)}`);
-      const lower = series.map((point, i) => `${x(point.minute).toFixed(1)},${y(base[i]).toFixed(1)}`).reverse();
-      svg('path', { class: 'area', d: `M${upper.join('L')}L${lower.join('L')}Z`, fill: color(index) }, root);
-      top.forEach((value, i) => { base[i] = value; });
-    });
-  } else {
-    GROUPS.forEach((group, index) => {
-      let d = '';
-      let pen = false;
-      for (const point of series) {
-        const value = point.values?.[index];
-        if (value === null || value === undefined) { pen = false; continue; }
-        d += `${pen ? 'L' : 'M'}${x(point.minute).toFixed(1)},${y(value).toFixed(1)}`;
-        pen = true;
-      }
-      if (d) svg('path', { class: 'line', d, stroke: color(index) }, root);
-    });
-    svg('line', { class: 'threshold', x1: m.left, x2: width - m.right, y1: y(threshold), y2: y(threshold) }, root);
-  }
-
-  svg('line', { class: 'now', x1: x(nowMinute), x2: x(nowMinute), y1: m.top, y2: m.top + plotH }, root);
-  svg('circle', { class: 'now-dot', cx: x(nowMinute), cy: m.top, r: 2.5 }, root);
-
-  const crosshair = svg('line', { class: 'crosshair', y1: m.top, y2: m.top + plotH, visibility: 'hidden' }, root);
-  const dots = GROUPS.map((group, index) => svg('circle', { class: 'dot', r: 4, fill: color(index), visibility: 'hidden' }, root));
-  const hit = svg('rect', { class: 'hit', x: m.left, y: m.top, width: plotW, height: plotH }, root);
-  const nearest = (event) => {
-    const box = root.getBoundingClientRect();
-    const minute = (((event.clientX - box.left) / box.width) * width - m.left) / plotW * 1440;
-    return series[Math.round(Math.min(1440, Math.max(0, minute)) / STEP_MINUTES)];
-  };
-  const tooltip = $('tooltip');
-  hit.addEventListener('pointermove', (event) => {
-    const point = nearest(event);
-    crosshair.setAttribute('x1', x(point.minute));
-    crosshair.setAttribute('x2', x(point.minute));
-    crosshair.setAttribute('visibility', 'visible');
-    let running = 0;
-    const rows = GROUPS.map((group, index) => {
-      const value = point.values?.[index];
-      if (value === null || value === undefined) {
-        dots[index].setAttribute('visibility', 'hidden');
-        return `<div class="t-row">${swatch(index)}${escapeHtml(group.deliveryGroup)}<b>—</b></div>`;
-      }
-      running += value;
-      dots[index].setAttribute('cx', x(point.minute));
-      dots[index].setAttribute('cy', y(stacked ? running : value));
-      dots[index].setAttribute('visibility', 'visible');
-      return `<div class="t-row">${swatch(index)}${escapeHtml(group.deliveryGroup)}<b>${stacked ? value : `${value.toFixed(1)} s`}</b></div>`;
-    });
-    tooltip.innerHTML = `<div class="t-head">${clockText(point.minute)} UTC · click to pin</div>${rows.join('')}`;
-    tooltip.hidden = false;
-    tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltip.offsetWidth - 8, event.clientX + 14))}px`;
-    tooltip.style.top = `${Math.max(8, event.clientY - tooltip.offsetHeight - 10)}px`;
-  });
-  hit.addEventListener('pointerleave', () => {
-    crosshair.setAttribute('visibility', 'hidden');
-    dots.forEach((dot) => dot.setAttribute('visibility', 'hidden'));
-    tooltip.hidden = true;
-  });
-  hit.addEventListener('click', (event) => {
-    state.clock = 'pinned';
-    state.minuteOfDay = Math.min(1430, nearest(event).minute);
-    update();
-  });
-
-  $('chart').replaceChildren(root);
-  $('legend').innerHTML = GROUPS.map((group, index) => `<span>${swatch(index)}${escapeHtml(group.deliveryGroup)}</span>`).join('')
-    + (threshold ? '<span><i class="thr"></i>alert at 30 s</span>' : '');
-}
-
-// ------------------------------------------------------------------ outputs
-
-// Numbers ease to their new value so a change is visible, not just a swap.
-function tween(element, target, format) {
-  const from = element._value ?? target;
-  element._value = target;
-  if (reducedMotion || from === target || target === null) {
-    element.innerHTML = format(target);
-    return;
-  }
-  const started = performance.now();
-  const step = (now) => {
-    const progress = Math.min(1, (now - started) / 350);
-    const eased = 1 - (1 - progress) ** 3;
-    element.innerHTML = format(progress === 1 ? target : from + (target - from) * eased);
-    if (progress < 1 && element._value === target) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
-function renderKpis(result) {
-  const container = $('kpis');
-  if (!container.children.length) {
-    container.innerHTML = ['sessions', 'vdas', 'logon', 'licenses']
-      .map((key) => `<div class="kpi" id="kpi-${key}"><dt></dt><dd></dd></div>`).join('');
-  }
-  const set = (key, label, value, format, tone = '', extra = '') => {
-    const tile = $(`kpi-${key}`);
-    tile.className = `kpi ${tone}`;
-    tile.querySelector('dt').textContent = label;
-    const dd = tile.querySelector('dd');
-    if (value === null) {
-      dd._value = null;
-      dd.innerHTML = '—';
-    } else {
-      tween(dd, value, format);
-    }
-    let bars = tile.querySelector('.bars');
-    if (extra) {
-      if (!bars) { bars = document.createElement('div'); bars.className = 'bars'; tile.appendChild(bars); }
-      bars.innerHTML = extra;
-    } else {
-      bars?.remove();
-    }
-  };
-
-  const snapshot = result.snapshot;
-  if (!snapshot) {
-    for (const [key, label] of [['sessions', 'Sessions'], ['vdas', 'Registered VDAs'], ['logon', 'Slowest logon'], ['licenses', 'Peak license use']]) {
-      set(key, label, null, String, 'off');
-    }
-    return;
-  }
-  const groups = groupStats(snapshot);
-  const registered = groups.reduce((sum, group) => sum + group.registered, 0);
-  const logons = groups.map((group) => group.logon).filter((value) => value !== null);
-  const slowest = logons.length ? Math.max(...logons) : null;
-  const ratios = snapshot.licenses.map((license) => ({ ...license, ratio: license.total ? license.inUse / license.total : 0 }));
-  const peak = Math.max(...ratios.map((license) => license.ratio));
-  const tone = (value, warn, crit) => (value > crit ? 'crit' : value > warn ? 'warn' : '');
-
-  set('sessions', 'Sessions', snapshot.sessions.length, (v) => Math.round(v));
-  set('vdas', 'Registered VDAs', registered, (v) => `${Math.round(v)}<small>/${TOTAL_VDAS}</small>`,
-    registered < TOTAL_VDAS * 0.95 ? 'warn' : '');
-  set('logon', 'Slowest logon', slowest, (v) => `${v.toFixed(1)}<small> s</small>`, tone(slowest ?? 0, 30, 60));
-  set('licenses', 'Peak license use', Math.round(peak * 100), (v) => `${Math.round(v)}<small>%</small>`, tone(peak, 0.9, 0.99),
-    ratios.map((license) => {
-      const cls = tone(license.ratio, 0.75, 0.9);
-      return `<div><span>${license.feature.split('_').pop()}</span><span class="meter ${cls}"><i style="width:${Math.min(1, license.ratio) * 100}%"></i></span></div>`;
-    }).join(''));
-}
-
-function renderStatus(result, alerts) {
-  const chips = [];
-  if (result.success) chips.push('<span class="chip ok">● Collecting</span>');
-  if (!alerts.length) chips.push('<span class="chip ok">No alerts</span>');
-  for (const alert of alerts) {
-    const cls = alert.severity === 'critical' ? 'crit' : 'warn';
-    const target = alert.target === 'exporter' ? '' : ` · ${escapeHtml(alert.target)}`;
-    chips.push(`<span class="chip ${cls}" title="${escapeHtml(alert.detail)}. Prometheus fires this after the condition holds for ${ALERT_FOR[alert.alert]}.">`
-      + `<b>${alert.alert}</b>${target} <small>${escapeHtml(alert.detail)}</small></span>`);
-  }
-  $('status').innerHTML = chips.join('');
-}
-
-function renderGroups(snapshot) {
-  const head = '<thead><tr><th>Delivery group</th><th>VDAs registered</th><th class="r">Sessions</th><th class="r opt">Disconnected</th><th class="r">Avg logon</th></tr></thead>';
-  if (!snapshot) {
-    $('groups').innerHTML = `${head}<tbody><tr><td colspan="5" class="empty">No Citrix data while collection fails. The exporter still answers with its own metrics →</td></tr></tbody>`;
-    return;
-  }
-  const rows = groupStats(snapshot).map((group, index) => {
-    const share = group.registered / group.machines;
-    const warn = (group.machines - group.registered) / group.machines > 0.05;
-    const slow = group.logon !== null && group.logon > 30;
-    return `<tr>
-      <td><span class="name">${swatch(index)}${escapeHtml(group.name)}</span></td>
-      <td><span class="vda ${warn ? 'warn' : ''}"><span>${group.registered}/${group.machines}</span><span class="meter ${warn ? 'warn' : ''}"><i style="width:${share * 100}%"></i></span></span></td>
-      <td class="r">${group.sessions}</td>
-      <td class="r opt">${group.disconnected}</td>
-      <td class="r ${slow ? 'warn' : ''}">${group.logon === null ? '—' : `${group.logon.toFixed(1)} s`}</td>
-    </tr>`;
-  });
-  $('groups').innerHTML = `${head}<tbody>${rows.join('')}</tbody>`;
-}
-
-function renderMetrics(result) {
+function renderShell(result) {
   const values = new Map();
   const html = [];
   for (const line of result.text.trimEnd().split('\n')) {
@@ -575,16 +293,222 @@ function renderMetrics(result) {
     html.push(`<span${changed ? ' class="chg"' : ''}>${escapeHtml(name)}${labels} <span class="v">${escapeHtml(value)}</span></span>`);
   }
   previousValues = values;
+  lastText = result.text;
   $('metrics').innerHTML = html.join('');
-  const status = $('term-status');
-  status.textContent = result.success ? '200' : '200 · scrape failed';
-  status.title = `${values.size} samples`;
-  status.className = `code ${result.success ? 'ok' : ''}`;
+}
+
+// ------------------------------------------------------------------ alerts
+
+// Prometheus semantics at one-minute resolution: a rule is pending while its
+// condition holds and firing once it has held for the rule's `for` period.
+// Earlier minutes are evaluated with the current scenario.
+function alertStates(scenario, at) {
+  const history = [];
+  for (let back = 0; back <= MAX_FOR_MINUTES; back += 1) {
+    const result = scrape(scenario, new Date(at.getTime() - back * 60000), { version: VERSION });
+    history.push(new Map(evaluateAlerts(result).map((alert) => [`${alert.alert}|${alert.target}`, alert])));
+  }
+  return ALERT_RULES.map((rule) => {
+    const active = [];
+    for (const [key, alert] of history[0]) {
+      if (alert.alert !== rule.name) continue;
+      let held = 0;
+      while (held + 1 < history.length && history[held + 1].has(key)) held += 1;
+      active.push({ ...alert, held, firing: held >= rule.forMinutes });
+    }
+    const status = active.some((item) => item.firing) ? 'firing' : active.length ? 'pending' : 'inactive';
+    return { ...rule, status, active };
+  });
+}
+
+function renderRules(rules) {
+  $('rules').innerHTML = rules.map((rule) => {
+    const active = rule.active.map((item) => {
+      const since = item.held >= MAX_FOR_MINUTES ? `≥${MAX_FOR_MINUTES}m` : item.held ? `${item.held}m` : "<1m";
+      const target = item.target === 'exporter' ? '' : `${escapeHtml(item.target)} `;
+      return `<div class="${item.firing ? 'firing' : 'pending'}">${target}<span>${escapeHtml(item.detail)} · for ${since}</span></div>`;
+    }).join('');
+    return `<li>
+      <div class="head"><span class="state ${rule.status}">${rule.status}</span><span class="rname">${rule.name}</span><span class="for">for ${rule.forMinutes}m</span></div>
+      <div class="expr">${escapeHtml(rule.expr)}</div>
+      ${active ? `<div class="active">${active}</div>` : ''}
+    </li>`;
+  }).join('');
+}
+
+// ------------------------------------------------------------------ grafana panel
+
+let historyCache = { key: null, points: null };
+
+function dayHistory(scenario, at) {
+  const start = dayStart(at);
+  const key = `${start}|${JSON.stringify(scenario)}`;
+  if (historyCache.key === key) return historyCache.points;
+  const points = [];
+  for (let minute = 0; minute <= 1440; minute += STEP_MINUTES) {
+    let snapshot = null;
+    try {
+      snapshot = syntheticSnapshot(scenario, new Date(start + minute * 60000));
+    } catch (error) {
+      if (error instanceof ScenarioError) throw error;
+    }
+    points.push({ minute, snapshot });
+  }
+  historyCache = { key, points };
+  return points;
+}
+
+const byGroup = (snapshot, reduce) => GROUPS.map((group) => reduce(
+  snapshot.machines.filter((item) => item.deliveryGroup === group.deliveryGroup),
+  snapshot.sessions.filter((item) => item.deliveryGroup === group.deliveryGroup),
+));
+const groupSeries = GROUPS.map((group, index) => ({ name: group.deliveryGroup, color: `--s${index + 1}` }));
+
+const PANELS = {
+  sessions: {
+    series: groupSeries,
+    stacked: true,
+    format: (value) => String(Math.round(value)),
+    values: (snapshot) => byGroup(snapshot, (machines, sessions) => sessions.length),
+  },
+  logon: {
+    series: groupSeries,
+    threshold: 30,
+    format: (value) => `${value.toFixed(1)} s`,
+    values: (snapshot) => byGroup(snapshot, (machines, sessions) => (sessions.length
+      ? sessions.reduce((sum, item) => sum + item.logonDurationSeconds, 0) / sessions.length
+      : null)),
+  },
+  licenses: {
+    series: FEATURES.map((feature, index) => ({ name: feature, color: `--s${index + 1}` })),
+    threshold: 90,
+    yMax: 100,
+    format: (value) => `${Math.round(value)}%`,
+    values: (snapshot) => FEATURES.map((feature) => {
+      const license = snapshot.licenses.find((item) => item.feature === feature);
+      return license.total ? (license.inUse / license.total) * 100 : 0;
+    }),
+  },
+  unregistered: {
+    series: groupSeries,
+    format: (value) => String(Math.round(value)),
+    values: (snapshot) => byGroup(snapshot, (machines) => machines.filter((item) => item.registrationState === 'Unregistered').length),
+  },
+};
+
+function niceMax(value) {
+  if (value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  for (const step of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (step * magnitude >= value) return step * magnitude;
+  return 10 * magnitude;
+}
+
+function renderPanel(history, now, nowMinute) {
+  const panel = PANELS[state.panel];
+  const points = history.map((point) => ({ minute: point.minute, values: point.snapshot && panel.values(point.snapshot) }));
+  const current = now.snapshot && panel.values(now.snapshot);
+  const width = 460;
+  const height = 210;
+  const m = { top: 6, right: 6, bottom: 20, left: 38 };
+  const plotW = width - m.left - m.right;
+  const plotH = height - m.top - m.bottom;
+
+  let maximum = panel.threshold ? panel.threshold * 1.15 : 0;
+  for (const point of points) {
+    if (!point.values) continue;
+    const values = point.values.map((value) => value ?? 0);
+    maximum = Math.max(maximum, panel.stacked ? values.reduce((a, b) => a + b, 0) : Math.max(...values));
+  }
+  const yMax = panel.yMax ?? niceMax(maximum * 1.05);
+  const x = (minute) => m.left + (minute / 1440) * plotW;
+  const y = (value) => m.top + plotH - (Math.min(value, yMax) / yMax) * plotH;
+
+  const hasData = points.some((point) => point.values);
+  const root = svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': $('panel-select').selectedOptions[0].text });
+  for (let tick = 0; tick <= 4; tick += 1) {
+    const value = (yMax / 4) * tick;
+    svg('line', { class: 'grid', x1: m.left, x2: width - m.right, y1: y(value), y2: y(value) }, root);
+    if (hasData) svg('text', { class: 'axis', x: m.left - 5, y: y(value) + 3.5, 'text-anchor': 'end' }, root).textContent = panel.format(value);
+  }
+  for (let hour = 0; hour <= 24; hour += 6) {
+    svg('text', { class: 'axis', x: x(hour * 60), y: height - 4, 'text-anchor': hour === 0 ? 'start' : hour === 24 ? 'end' : 'middle' }, root)
+      .textContent = `${pad(hour % 24)}:00`;
+  }
+
+  if (!hasData) {
+    svg('text', { class: 'nodata', x: m.left + plotW / 2, y: m.top + plotH / 2, 'text-anchor': 'middle' }, root).textContent = 'No data';
+  } else {
+    const base = points.map(() => 0);
+    panel.series.forEach((series, index) => {
+      let d = '';
+      let pen = false;
+      const tops = [];
+      for (const [i, point] of points.entries()) {
+        const raw = point.values?.[index];
+        if (raw === null || raw === undefined) { pen = false; tops.push(null); continue; }
+        const value = panel.stacked ? base[i] + raw : raw;
+        tops.push(value);
+        d += `${pen ? 'L' : 'M'}${x(point.minute).toFixed(1)},${y(value).toFixed(1)}`;
+        pen = true;
+      }
+      if (panel.stacked) {
+        const lower = points.map((point, i) => `${x(point.minute).toFixed(1)},${y(base[i]).toFixed(1)}`).reverse();
+        svg('path', { class: 'area', d: `${d}L${lower.join('L')}Z`, fill: `var(${series.color})`, stroke: `var(${series.color})` }, root);
+        tops.forEach((value, i) => { if (value !== null) base[i] = value; });
+      } else if (d) {
+        svg('path', { class: 'line', d, stroke: `var(${series.color})` }, root);
+      }
+    });
+    if (panel.threshold) {
+      svg('line', { class: 'threshold', x1: m.left, x2: width - m.right, y1: y(panel.threshold), y2: y(panel.threshold) }, root);
+    }
+  }
+  svg('line', { class: 'now', x1: x(nowMinute), x2: x(nowMinute), y1: m.top, y2: m.top + plotH }, root);
+
+  const cross = svg('line', { class: 'cross', y1: m.top, y2: m.top + plotH, visibility: 'hidden' }, root);
+  const hit = svg('rect', { class: 'hit', x: m.left, y: m.top, width: plotW, height: plotH }, root);
+  const tooltip = $('tooltip');
+  const nearest = (event) => {
+    const box = root.getBoundingClientRect();
+    const minute = ((((event.clientX - box.left) / box.width) * width - m.left) / plotW) * 1440;
+    return points[Math.round(Math.min(1440, Math.max(0, minute)) / STEP_MINUTES)];
+  };
+  hit.addEventListener('pointermove', (event) => {
+    const point = nearest(event);
+    cross.setAttribute('x1', x(point.minute));
+    cross.setAttribute('x2', x(point.minute));
+    cross.setAttribute('visibility', 'visible');
+    const rows = panel.series.map((series, index) => {
+      const value = point.values?.[index];
+      return `<div class="t-row">${swatch(series.color)}${escapeHtml(series.name)}<b>${value === null || value === undefined ? '—' : panel.format(value)}</b></div>`;
+    }).join('');
+    tooltip.innerHTML = `<div class="t-head">${clockText(point.minute)} UTC · click to pin</div>${rows}`;
+    tooltip.hidden = false;
+    tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltip.offsetWidth - 8, event.clientX + 12))}px`;
+    tooltip.style.top = `${Math.max(8, event.clientY - tooltip.offsetHeight - 10)}px`;
+  });
+  hit.addEventListener('pointerleave', () => {
+    cross.setAttribute('visibility', 'hidden');
+    tooltip.hidden = true;
+  });
+  hit.addEventListener('click', (event) => {
+    state.clock = 'pinned';
+    state.minuteOfDay = Math.min(1430, nearest(event).minute);
+    update();
+  });
+  $('chart').replaceChildren(root);
+
+  const rows = panel.series.map((series, index) => {
+    const values = points.map((point) => point.values?.[index]).filter((value) => value !== null && value !== undefined);
+    const last = current?.[index];
+    return `<tr><td><span class="name">${swatch(series.color)}${escapeHtml(series.name)}</span></td>
+      <td>${last === null || last === undefined ? '—' : panel.format(last)}</td>
+      <td>${values.length ? panel.format(Math.max(...values)) : '—'}</td></tr>`;
+  }).join('');
+  $('legend').innerHTML = `<thead><tr><th></th><th>now</th><th>max today</th></tr></thead><tbody>${rows}</tbody>`;
 }
 
 // ------------------------------------------------------------------ update
-
-let lastResult = null;
 
 function update() {
   $('scenario-error').classList.remove('show');
@@ -598,14 +522,12 @@ function update() {
     return;
   }
   if (!result.success) state.errorCount += 1;
-  lastResult = result;
 
-  syncControls();
-  renderStatus(result, evaluateAlerts(result));
-  renderKpis(result);
-  renderGroups(result.snapshot);
-  renderMetrics(result);
-  drawChart(dayHistory(scenario, at), minuteOf(at));
+  syncControls(at);
+  $('scenario-json').textContent = `${JSON.stringify(scenario, null, 2)}\n`;
+  renderShell(result);
+  renderRules(alertStates(scenario, at));
+  renderPanel(dayHistory(scenario, at), result, minuteOf(at));
 }
 
 buildControls();

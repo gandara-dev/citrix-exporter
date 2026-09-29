@@ -14,7 +14,7 @@ import {
   syntheticSnapshot,
   toPrometheusText,
 } from '../../site/lib/playground.js';
-import { ALERT_FOR, PRESETS, VERSION } from '../../site/lib/presets.js';
+import { ALERT_RULES, PRESETS, VERSION } from '../../site/lib/presets.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8');
@@ -60,10 +60,12 @@ test('every preset is a valid scenario', () => {
   }
 });
 
-test('alert `for` periods match monitoring/alerts.yml', () => {
+test('the page shows the rules exactly as monitoring/alerts.yml defines them', () => {
   const rules = read('monitoring/alerts.yml');
-  const parsed = Object.fromEntries([...rules.matchAll(/- alert: (\w+)[\s\S]*?for: (\w+)/g)].map((match) => [match[1], match[2]]));
-  assert.deepEqual(parsed, { ...ALERT_FOR });
+  const parsed = Object.fromEntries([...rules.matchAll(/- alert: (\w+)[\s\S]*?for: (\d+)m/g)].map((match) => [match[1], Number(match[2])]));
+  assert.deepEqual(parsed, Object.fromEntries(ALERT_RULES.map((rule) => [rule.name, rule.forMinutes])));
+  const normalized = rules.replace(/\s+/g, ' ');
+  for (const rule of ALERT_RULES) assert.ok(normalized.includes(`expr: ${rule.expr}`) || normalized.includes(`expr: >- ${rule.expr}`), rule.name);
 });
 
 test('alert thresholds match monitoring/alerts.yml', () => {

@@ -54,10 +54,27 @@ export const PRESETS = Object.freeze([
   },
 ]);
 
-// The `for` period of each rule in monitoring/alerts.yml.
-export const ALERT_FOR = Object.freeze({
-  CitrixExporterCollectionFailing: '5m',
-  CitrixVdasUnregistered: '10m',
-  CitrixLicensesNearlyExhausted: '15m',
-  CitrixSlowLogons: '15m',
-});
+// The rules in monitoring/alerts.yml. The Node suite checks every name, `for`
+// period, and expression against that file.
+export const ALERT_RULES = Object.freeze([
+  {
+    name: 'CitrixExporterCollectionFailing',
+    forMinutes: 5,
+    expr: 'citrix_exporter_scrape_success == 0',
+  },
+  {
+    name: 'CitrixVdasUnregistered',
+    forMinutes: 10,
+    expr: 'sum by (delivery_group) (citrix_vdas{registration_state="Unregistered"}) / sum by (delivery_group) (citrix_vdas) > 0.05',
+  },
+  {
+    name: 'CitrixLicensesNearlyExhausted',
+    forMinutes: 15,
+    expr: 'citrix_licenses_in_use / citrix_licenses > 0.9',
+  },
+  {
+    name: 'CitrixSlowLogons',
+    forMinutes: 15,
+    expr: 'citrix_logon_duration_seconds > 30',
+  },
+]);
