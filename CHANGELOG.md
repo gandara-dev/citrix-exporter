@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- GitHub Codespaces configuration: one click starts the exporter, Prometheus,
+  and Grafana on the synthetic site and opens Grafana on the dashboard.
+
+### Changed
+
+- Grafana opens on the Citrix VDI Overview dashboard, and takes its public
+  address from `GRAFANA_ROOT_URL` so it works behind forwarded URLs.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
