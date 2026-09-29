@@ -57,6 +57,11 @@ services:
       GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
       GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # Open the dashboard directly instead of the Grafana home page.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/citrix-overview.json
+      # Behind a forwarded URL (for example GitHub Codespaces) Grafana must know
+      # its public address, or it rejects the panel queries.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/}
     volumes:
       - ./monitoring/grafana/provisioning/datasources/prometheus.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
       - ./monitoring/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
