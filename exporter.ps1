@@ -7,7 +7,8 @@ param(
     [string[]]$InjectFailureSource = @(),
     [string]$AdminAddress,
     [string]$LmstatPath,
-    [string]$LicenseServer
+    [string]$LicenseServer,
+    [string]$ScenarioPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,5 +23,6 @@ $parameters = @{
     AdminAddress = $AdminAddress
     LmstatPath = $LmstatPath
     LicenseServer = $LicenseServer
+    ScenarioPath = $ScenarioPath
 }
 Start-CitrixExporter @parameters

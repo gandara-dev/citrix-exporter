@@ -24,6 +24,17 @@ jobs:
         shell: pwsh
         run: Invoke-Pester -Path ./tests/CitrixExporter.Tests.ps1 -CI -Output Detailed
 
+  web-tests:
+    name: Metrics Playground tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run fixtures generated from the PowerShell exporter
+        run: node --test tests/web/*.test.mjs
+
   lint:
     name: PowerShell analysis
     runs-on: ubuntu-latest

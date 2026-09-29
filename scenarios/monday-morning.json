@@ -1,0 +1,6 @@
+{
+  "loadPercent": 95,
+  "disconnectedPercent": 5,
+  "unregisteredVdas": { "Engineering Desktops": 4 },
+  "logonSlowdownSeconds": 12
+}

@@ -12,6 +12,13 @@ Grafana dashboard work without a Citrix environment.
 > All simulation hostnames, delivery groups, catalogs, features, and values are
 > fictional. Never commit production credentials or customer data.
 
+**Try it in the browser:** the [Metrics Playground](https://gandara-dev.github.io/citrix-exporter/)
+runs the same synthetic site as `-Simulation` mode. Change load, unregistered
+VDAs, logon delay, license pools, or take the Broker down, and watch `/metrics`
+and the alert rules react.
+
+![Metrics Playground: scenario file, /metrics response, alert rules, and a panel](docs/metrics-playground.jpg)
+
 ![Citrix Exporter demo](docs/demo.gif)
 
 ## Why
@@ -54,12 +61,32 @@ Open:
 - Prometheus: <http://localhost:9090>
 - Grafana dashboard: <http://localhost:3000/d/citrix-vdi-overview/citrix-vdi-overview>
 
-Grafana permits anonymous viewer access only for this local demonstration. Stop
-and remove the stack when finished:
+Grafana permits anonymous viewer access only for this local demonstration.
+
+To replay a synthetic incident, point `EXPORTER_SCENARIO` at a file in
+[`scenarios/`](scenarios) (or one exported from the playground):
+
+```powershell
+$env:EXPORTER_SCENARIO = 'slow-logons.json'
+docker compose up --build --detach --wait
+```
+
+Prometheus loads the alert rules in [`monitoring/alerts.yml`](monitoring/alerts.yml),
+so the matching alerts go pending and then fire in the dashboard.
+
+Stop and remove the stack when finished:
 
 ```powershell
 docker compose down --volumes
 ```
+
+## Grafana dashboard
+
+![Grafana dashboard during the Monday morning scenario](docs/grafana-dashboard.jpg)
+
+The provisioned dashboard after ten minutes of the `monday-morning.json`
+scenario: four Engineering VDAs unregistered for longer than the rule's `for`
+period, so `CitrixVdasUnregistered` is firing. Data is synthetic.
 
 ## Metrics
 
@@ -99,6 +126,23 @@ pwsh ./exporter.ps1 `
 ```
 
 Valid failure sources are `Broker` and `Licensing`.
+
+Replay a scenario file. Its values are validated once at startup; unknown keys
+are ignored:
+
+```powershell
+pwsh ./exporter.ps1 -ListenAddress 127.0.0.1 -Port 9187 -Simulation `
+    -ScenarioPath ./scenarios/monday-morning.json
+```
+
+| Key | Range | Effect |
+|---|---|---|
+| `loadPercent` | 0-100 | Fixed share of registered VDAs in use instead of the daily curve |
+| `disconnectedPercent` | 0-100 | Share of sessions that are disconnected (default 15) |
+| `logonSlowdownSeconds` | 0-600 | Added to every logon |
+| `unregisteredVdas` | 0-group size | Per delivery group, replaces random drop-offs |
+| `licenseTotals` | 0-100000 | Issued licenses for `MPS_ENT_CCU` and `XDT_ENT_UD` |
+| `brokerDown`, `licensingDown` | boolean | Fail every collection from that source |
 
 ## Connect to Citrix
 
@@ -153,11 +197,13 @@ in front of it before any remote exposure. Follow the
 ```powershell
 Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
 Invoke-Pester -Path ./tests/CitrixExporter.Tests.ps1 -CI -Output Detailed
+node --test tests/web/*.test.mjs
 ```
 
-CI runs Pester on Windows and Linux, performs PowerShell static analysis, checks
+CI runs Pester on Windows and Linux, runs the playground engine against fixtures generated from the module,
+performs PowerShell static analysis, checks
 all Mermaid sources, starts the complete Compose stack, validates exposition
-with `promtool`, queries Prometheus, and confirms Grafana provisioning. See the
+and the alert rules with `promtool`, queries Prometheus, and confirms Grafana provisioning. See the
 [testing guide](docs/testing.md) for exact local commands.
 
 After `docker compose up`, run the same cross-platform acceptance check used by
@@ -183,8 +229,10 @@ CI:
 .
 |-- exporter.ps1                 Executable entry point
 |-- src/CitrixExporter/          PowerShell module and providers
-|-- monitoring/                  Prometheus and Grafana provisioning
-|-- tests/                       Pester tests
+|-- monitoring/                  Prometheus, alert rules, and Grafana provisioning
+|-- scenarios/                   Synthetic incidents for -ScenarioPath
+|-- site/                        Metrics Playground (GitHub Pages)
+|-- tests/                       Pester, Node, and shared fixtures
 |-- demo/                        Reproducible terminal demo generator
 |-- docs/                        Technical documentation and diagrams
 |-- compose.yml                  Local synthetic monitoring stack
@@ -193,11 +241,14 @@ CI:
 
 ## Current scope
 
-Version `0.1.1` supports one synchronous target per exporter process. It does
+Version `0.2.0` supports one synchronous target per exporter process. It does
 not provide authentication, TLS, caching, concurrent collection, service
 installation, or automatic discovery. These are explicit operational
 boundaries, not implicit promises.
 
 ## License
 
-[MIT](LICENSE)
+[PolyForm Shield 1.0.0](LICENSE). You may use, study, and modify this project,
+including inside your organization, but not to offer a product that competes
+with it. This is a source-available license, not an OSI-approved open-source
+license. Releases up to v0.1.1 were published under the MIT license.

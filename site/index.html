@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Metrics Playground | Citrix Exporter</title>
+  <meta name="description" content="Edit a synthetic Citrix site and watch the exporter's /metrics output, the Prometheus alert rules, and a Grafana panel react.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="name" href="https://github.com/gandara-dev/citrix-exporter">citrix-exporter</a>
+    <span class="dim">playground · synthetic site, runs in your browser</span>
+    <span class="grow"></span>
+    <label class="field">scenario
+      <select id="preset"></select>
+    </label>
+    <div class="clock" role="group" aria-label="Clock">
+      <button type="button" id="clock-live" aria-pressed="false">live</button>
+      <button type="button" id="clock-replay" aria-pressed="false">replay day</button>
+      <input type="range" id="time" min="0" max="1430" step="10" aria-label="Time of day (UTC)">
+      <output id="time-out"></output>
+    </div>
+  </header>
+
+  <div class="app">
+    <section class="pane site" aria-labelledby="site-title">
+      <h2 id="site-title"><span class="file">scenario.json</span></h2>
+
+      <div class="row">
+        <label for="load">load</label>
+        <output id="load-out"></output>
+        <button type="button" class="auto" id="load-auto" title="Follow the daily load curve">auto</button>
+        <input type="range" id="load" min="0" max="100">
+      </div>
+      <div class="row">
+        <label for="slowdown">logon delay</label>
+        <output id="slow-out"></output>
+        <input type="range" id="slowdown" min="0" max="120">
+      </div>
+
+      <h3>unregistered VDAs</h3>
+      <div id="vda-controls"></div>
+
+      <h3>license pools</h3>
+      <label class="num">MPS_ENT_CCU <input type="number" id="lic-MPS_ENT_CCU" min="0" max="100000" step="1" inputmode="numeric"></label>
+      <label class="num">XDT_ENT_UD <input type="number" id="lic-XDT_ENT_UD" min="0" max="100000" step="1" inputmode="numeric"></label>
+
+      <h3>failures</h3>
+      <label class="tick"><input type="checkbox" id="broker-down"> Broker SDK unreachable</label>
+      <label class="tick"><input type="checkbox" id="licensing-down"> license server unreachable</label>
+
+      <p class="error" id="scenario-error" role="alert"></p>
+
+      <pre class="json" id="scenario-json" aria-label="Current scenario file"></pre>
+      <div class="actions">
+        <button type="button" id="download-scenario">export</button>
+        <label class="button" for="open-file">import</label>
+        <input type="file" id="open-file" accept="application/json,.json" class="sr-only">
+        <button type="button" id="reset">reset</button>
+      </div>
+      <p class="hint">Replay it in the real stack:<br><code>EXPORTER_SCENARIO=scenario.json docker compose up</code></p>
+    </section>
+
+    <section class="pane shell" aria-label="Exporter output">
+      <div class="prompt"><span class="ps">$</span> curl -s localhost:9187/metrics<span class="grow"></span><label class="dim"><input type="checkbox" id="show-comments"> # HELP/TYPE</label><button type="button" id="copy-metrics">copy</button></div>
+      <pre id="metrics" tabindex="0" aria-label="Prometheus exposition text"></pre>
+    </section>
+
+    <div class="pane side">
+      <section aria-labelledby="alerts-title">
+        <h2 id="alerts-title">Prometheus <span class="dim">› Alerts</span></h2>
+        <ol class="rules" id="rules"></ol>
+      </section>
+
+      <section class="panel" aria-labelledby="panel-title">
+        <h2 id="panel-title">Grafana <span class="dim">›</span>
+          <select id="panel-select" aria-label="Panel">
+            <option value="sessions">Sessions by delivery group</option>
+            <option value="logon">Average logon duration</option>
+            <option value="licenses">License utilization</option>
+            <option value="unregistered">Unregistered VDAs</option>
+          </select>
+        </h2>
+        <div class="chart" id="chart"></div>
+        <table class="legend" id="legend"></table>
+      </section>
+    </div>
+  </div>
+
+  <footer class="bottom">
+    Fictional delivery groups and license pools. Same engine as <code>exporter.ps1 -Simulation</code>, tested byte for byte against it.
+    Shows the output contract and alert logic, not a real deployment.
+    <a href="https://github.com/gandara-dev/citrix-exporter#readme">README</a>
+  </footer>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

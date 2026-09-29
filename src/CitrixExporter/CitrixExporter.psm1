@@ -1,3 +1,5 @@
+$script:ExporterVersion = (Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'CitrixExporter.psd1')).ModuleVersion
+
 $privatePath = Join-Path $PSScriptRoot 'Private'
 $publicPath = Join-Path $PSScriptRoot 'Public'
 
