@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-01
+
 ### Added
 
 - GitHub Codespaces configuration: one click starts the exporter, Prometheus,
@@ -13,6 +15,8 @@ All notable changes to this project are documented here.
 
 - Grafana opens on the Citrix VDI Overview dashboard, and takes its public
   address from `GRAFANA_ROOT_URL` so it works behind forwarded URLs.
+- Dependabot also watches the dev container features and the Prometheus and
+  Grafana images pinned in `compose.yml`.
 
 ## [0.2.0] - 2026-09-28
 

@@ -2,7 +2,7 @@
 // checks each preset against scenarios/*.json, the version against the module
 // manifest, and the `for` periods against monitoring/alerts.yml.
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 
 export const PRESETS = Object.freeze([
   {

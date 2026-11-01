@@ -251,7 +251,7 @@ CI:
 
 ## Current scope
 
-Version `0.2.0` supports one synchronous target per exporter process. It does
+Version `0.2.1` supports one synchronous target per exporter process. It does
 not provide authentication, TLS, caching, concurrent collection, service
 installation, or automatic discovery. These are explicit operational
 boundaries, not implicit promises.
